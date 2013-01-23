@@ -41,11 +41,24 @@
   "options": "Workflow Action"
  }, 
  {
+  "doctype": "DocField",
+  "label": "Pre Function",
+  "fieldname": "pre_function",
+  "options": "Workflow Pre Function"
+ },
+ {
   "doctype": "DocField", 
   "label": "Next State", 
   "fieldname": "next_state", 
   "options": "Workflow State"
  }, 
+ {
+  "doctype": "DocField",
+  "label": "Post Function",
+  "fieldname": "post_function",
+  "options": "Workflow Post Function"
+ },
+
  {
   "doctype": "DocField", 
   "label": "Allowed", 
