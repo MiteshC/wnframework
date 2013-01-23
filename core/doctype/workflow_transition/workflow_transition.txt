@@ -58,7 +58,6 @@
   "fieldname": "post_function",
   "fieldtype": "Data"
  },
-
  {
   "doctype": "DocField", 
   "label": "Allowed", 
