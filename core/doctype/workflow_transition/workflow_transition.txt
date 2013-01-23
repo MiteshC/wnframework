@@ -44,7 +44,7 @@
   "doctype": "DocField",
   "label": "Pre Function",
   "fieldname": "pre_function",
-  "options": "Workflow Pre Function"
+  "fieldtype": "Data"
  },
  {
   "doctype": "DocField", 
@@ -56,7 +56,7 @@
   "doctype": "DocField",
   "label": "Post Function",
   "fieldname": "post_function",
-  "options": "Workflow Post Function"
+  "fieldtype": "Data"
  },
 
  {
