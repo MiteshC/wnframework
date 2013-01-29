@@ -21,22 +21,26 @@
 # 
 
 from __future__ import unicode_literals
-"""
-Transactions are defined as collection of classes, a ModelWrapper represents collection of Document
-objects for a transaction with main and children.
-
-Group actions like save, etc are performed on doclists
-"""
+##	Transactions are defined as collection of classes, a ModelWrapper represents collection of Document<br />
+#	objects for a transaction with main and children.
+#
+#	Group actions like save, etc are performed on doclists.
+#	@package webnotes
 
 import webnotes
 from webnotes import _
 from webnotes.utils import cint
 from webnotes.model.doc import Document
 
+##	Collection of Documents with one parent and multiple children
 class ModelWrapper:
-	"""
-	Collection of Documents with one parent and multiple children
-	"""
+	##	ModelWrapper constructor<br />
+	#	
+	#	@see load_from_db()
+	#	@see set_doclist()
+	#
+	#	@param dt doctype(default None)
+	#	@param dn doc name(default None)
 	def __init__(self, dt=None, dn=None):
 		self.docs = []
 		self.obj = None
@@ -50,11 +54,17 @@ class ModelWrapper:
 			self.set_doclist(dt)
 		elif isinstance(dt, dict):
 			self.set_doclist([dt])
-
+			
+	##	Load doclist from dt
+	#	
+	#	@see set_doclist()
+	#	@see run_method()
+	#
+	#	@param dt The DocType on which need the data(default None)
+	#	@param dn The DocName on which need the data(default None)
+	#	@param prefix It is the prefix to table name (default tab)
 	def load_from_db(self, dt=None, dn=None, prefix='tab'):
-		"""
-			Load doclist from dt
-		"""
+		
 		from webnotes.model.doc import Document, getchildren
 
 		if not dt: dt = self.doc.doctype
@@ -73,16 +83,19 @@ class ModelWrapper:
 		self.set_doclist(doclist)
 		self.run_method("onload")
 
+	##	Make this iterable
+	#
+	#	@return <code>self.docs.__iter__()</code>
 	def __iter__(self):
-		"""
-			Make this iterable
-		"""
+		
 		return self.docs.__iter__()
 
+	##	Expand called from client
+	#
+	#	@param data The data to expand
+	#	@see set_doclist()
 	def from_compressed(self, data, docname):
-		"""
-			Expand called from client
-		"""
+		
 		from webnotes.model.utils import expand
 		self.docs = expand(data)
 		self.set_doclist(self.docs)
@@ -97,27 +110,28 @@ class ModelWrapper:
 		if self.obj:
 			self.obj.doclist = self.doclist
 			self.obj.doc = self.doc
-
+	
+	##	Create a DocType object
+	#	
+	#	@return DocType Object
 	def make_obj(self):
-		"""
-			Create a DocType object
-		"""
+		
 		if self.obj: return self.obj
 
 		from webnotes.model.code import get_obj
 		self.obj = get_obj(doc=self.doc, doclist=self.doclist)
 		return self.obj
 
+	##	return as a list of dictionaries
+	#
+	#	@return list of dictionaries
 	def to_dict(self):
-		"""
-			return as a list of dictionaries
-		"""
 		return [d.fields for d in self.docs]
 
+	##	Raises exception if the modified time is not the same as in the database
+	#	
 	def check_if_latest(self):
-		"""
-			Raises exception if the modified time is not the same as in the database
-		"""
+		
 		from webnotes.model.meta import is_single
 
 		if (not is_single(self.doc.doctype)) and (not cint(self.doc.fields.get('__islocal'))):
@@ -183,7 +197,10 @@ class ModelWrapper:
 				d.fields["__islocal"] = 1
 			
 			idx_map[d.parentfield] = d.idx
-
+	##	This method runs the python function within specific DocType<br/>
+	#	This will check if the python function declared in DocType or not, otherwise it will call given method with <code>custom_</code> prefix.
+	#
+	#	@param method The name of method to be called
 	def run_method(self, method):
 		self.make_obj()
 		if hasattr(self.obj, method):
@@ -232,14 +249,29 @@ class ModelWrapper:
 			else:
 				webnotes.conn.sql("""delete from `tab%s` where parent=%s and parenttype=%s""" \
 					% (dt[0], '%s', '%s'), (self.doc.name, self.doc.doctype))
-
+	##	This function inserting the doc fields
+	#	
+	#	@see save()
+	#	@return save method 
 	def insert(self):
 		self.doc.fields["__islocal"] = 1
 		return self.save()
-	
+		
+	##	This method gives the read permission
+	#
+	#	@return <code>webnotes.has_permission</code>
 	def has_read_perm(self):
 		return webnotes.has_permission(self.doc.doctype, "read", self.doc)
-	
+		
+	##	This method checks the permission to write if it has then calls the another methods for saving data<br />
+	#	else display the message no permission to write
+	#
+	#	@return <code>self</code>object
+	#	@see prepare_for_save()
+	#	@see run_method()
+	#	@see save_main()
+	#	@see save_children()
+	#	@see no_permission_to()
 	def save(self, check_links=1):
 		if self.ignore_permissions or webnotes.has_permission(self.doc.doctype, "write", self.doc):
 			self.prepare_for_save(check_links)
@@ -260,7 +292,14 @@ class ModelWrapper:
 			self.no_permission_to(_("Write"))
 		
 		return self
-
+		
+	##	This method first check the permission for submit<br />
+	#	If it has then save the data
+	#	If it not raise the exception
+	#
+	#	@see save()
+	#	@see run_method()
+	#	@return self object
 	def submit(self):
 		if self.ignore_permissions or webnotes.has_permission(self.doc.doctype, "submit", self.doc):
 			if self.doc.docstatus != 0:
@@ -272,7 +311,15 @@ class ModelWrapper:
 			self.no_permission_to(_("Submit"))
 			
 		return self
-
+	
+	##	This method cansceling the submitted doc
+	#
+	#	@see prepare_for_save()
+	#	@see save_main()
+	#	@see save_children()
+	#	@see run_method()
+	#	@see no_permission_to()
+	#	@return self object
 	def cancel(self):
 		if self.ignore_permissions or webnotes.has_permission(self.doc.doctype, "cancel", self.doc):
 			if self.doc.docstatus != 1:
@@ -286,7 +333,15 @@ class ModelWrapper:
 			self.no_permission_to(_("Cancel"))
 			
 		return self
-
+		
+	##	This method update the data of the submitted doc
+	#
+	#	@see prepare_for_save()
+	#	@see save_main()
+	#	@see save_children()
+	#	@see run_method()
+	#	@see no_permission_to()
+	#	@return self object
 	def update_after_submit(self):
 		if self.doc.docstatus != 1:
 			webnotes.msgprint("Only to called after submit", raise_exception=1)
@@ -300,15 +355,17 @@ class ModelWrapper:
 			self.no_permission_to(_("Update"))
 		
 		return self
-
+	## This method used to display the message for no permission
+	#
 	def no_permission_to(self, ptype):
 		webnotes.msgprint(("%s (%s): " % (self.doc.name, _(self.doc.doctype))) + \
 			_("No Permission to ") + ptype, raise_exception=True)
 
-# clone
-
+	##	Copy previous invoice and change dates
+	#
+	#	@param source_wrapper The source_wrapper
+	#	@return <code>new_wrapper</code>
 def clone(source_wrapper):
-	""" Copy previous invoice and change dates"""
 	if isinstance(source_wrapper, list):
 		source_wrapper = ModelWrapper(source_wrapper)
 	
@@ -349,18 +406,23 @@ def notify(controller, caller_method):
 	call_observers("*:" + caller_method)
 	call_observers(doctype + ":" + caller_method)
 
-# for bc
+	##Return child records of a particular type
+	#
+	#	@param doclist The DocList which is used to copy 
+	#	@param parentfield The ParentFild which is need to get list
+	#	@return <code>webnotes.model.utils.getlist</code>
 def getlist(doclist, parentfield):
-	"""
-		Return child records of a particular type
-	"""
+	
 	import webnotes.model.utils
 	return webnotes.model.utils.getlist(doclist, parentfield)
-
+	
+	##	Make a copy of the doclist
+	#
+	#	@param doclist The DocList which is used to copy 
+	#	@param no_copy The No of Copy of the doc
+	#	@return <code>webnotes.model.utils.copy_doclist</code>
 def copy_doclist(doclist, no_copy = []):
-	"""
-		Make a copy of the doclist
-	"""
+	
 	import webnotes.model.utils
 	return webnotes.model.utils.copy_doclist(doclist, no_copy)
 
