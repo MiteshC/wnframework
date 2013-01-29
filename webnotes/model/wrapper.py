@@ -243,10 +243,19 @@ class ModelWrapper:
 	def save(self, check_links=1):
 		if self.ignore_permissions or webnotes.has_permission(self.doc.doctype, "write", self.doc):
 			self.prepare_for_save(check_links)
+			workflowTransition = []
+			if self.doc.workflow_state:
+				previousState = webnotes.conn.get_value(self.doc.doctype, self.doc.name, 'workflow_state')
+				if previousState<>self.doc.workflow_state:
+					workflowTransition = webnotes.conn.sql("""select `tabWorkflow Transition`.`pre_function`, `tabWorkflow Transition`.`post_function` from `tabWorkflow Transition` left join `tabWorkflow` on (`tabWorkflow`.name=`tabWorkflow Transition`.parent) where `tabWorkflow Transition`.`state`="%s" and `tabWorkflow Transition`.`next_state`="%s" and `tabWorkflow`.`is_active`=1 """%(previousState,self.doc.workflow_state))
 			self.run_method('validate')
+			if len(workflowTransition)==1 and workflowTransition[0][0]<>"" and workflowTransition[0][0] is not None:
+				self.run_method(workflowTransition[0][0])
 			self.save_main()
 			self.save_children()
 			self.run_method('on_update')
+			if len(workflowTransition)==1  and workflowTransition[0][1]<>"" and workflowTransition[0][1] is not None:
+				self.run_method(workflowTransition[0][1])
 		else:
 			self.no_permission_to(_("Write"))
 		
