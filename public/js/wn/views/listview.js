@@ -5,104 +5,106 @@ wn.views.get_listview = function(doctype, parent) {
 	var meta = locals.DocType[doctype];
 	if(meta.__listjs) {
 		eval(meta.__listjs);
+	}
+	
+	if(wn.doclistviews[doctype]) {
 		var listview = new wn.doclistviews[doctype](parent);
 	} else {
-		var listview = new wn.views.ListView(parent);
+		var listview = new wn.views.ListView(parent, doctype);
 	}
 	return listview;
 }
 
+wn.provide("wn.listview_settings");
 wn.views.ListView = Class.extend({
-	init: function(doclistview) {
+	init: function(doclistview, doctype) {
 		this.doclistview = doclistview;
-		this.doctype = doclistview.doctype;
-		
+		this.doctype = doctype;
+		this.settings = wn.listview_settings[this.doctype] || {};		
+		this.set_fields();
+		this.set_columns();
+		if(this.settings.group_by) 
+			this.group_by = this.settings.group_by;
+	},
+	set_fields: function() {
+		var me = this;
 		var t = "`tab"+this.doctype+"`.";
 		this.fields = [t + 'name', t + 'owner', t + 'docstatus', 
 			t + '_user_tags', t + 'modified', t + 'modified_by'];
 		this.stats = ['_user_tags'];
-		this.show_hide_check_column();
-
-	},
-	columns: [
-		{width: '3%', content:'check'},
-		{width: '4%', content:'avatar'},
-		{width: '3%', content:'docstatus', css: {"text-align": "center"}},
-		{width: '35%', content:'name'},
-		{width: '40%', content:'tags', css: {'color':'#aaa'}},
-		{width: '15%', content:'modified', css: {'text-align': 'right', 'color':'#222'}}		
-	],
-	render_column: function(data, parent, opts) {
-		var me = this;
-		
-		// style
-		if(opts.css) {
-			$.each(opts.css, function(k, v) { $(parent).css(k, v)});
-		}
-		
-		// multiple content
-		if(opts.content.indexOf && opts.content.indexOf('+')!=-1) {
-			$.map(opts.content.split('+'), function(v) {
-				me.render_column(data, parent, {content:v, title: opts.title});
-			});
-			return;
-		}
-		
-		// content
-		if(typeof opts.content=='function') {
-			opts.content(parent, data, me);
-		}
-		else if(opts.content=='name') {
-			$(parent).append(repl('<a href="#Form/%(doctype)s/%(name)s" \
-				title=\"%(name)s\">%(name)s</a>', data));
-		} 
-		else if(opts.content=='avatar') {
-			$(parent).append(wn.avatar(data.owner, false, wn._("Created by")+": " 
-				+ wn.user_info(data.owner).fullname));
-		}
-		else if(opts.content=='avatar_modified') {
-			$(parent).append(wn.avatar(data.modified_by, false, wn._("Modified by")+": " 
-				+ wn.user_info(data.modified_by).fullname));
-		}
-		else if(opts.content=='check') {
-			$(parent).append('<input class="list-delete" type="checkbox">');
-			$(parent).find('input').data('name', data.name);			
-		}
-		else if(opts.content=='docstatus') {
-			$(parent).append(repl('<span class="docstatus"> \
-				<i class="%(docstatus_icon)s" \
-				title="%(docstatus_title)s"></i></span>', data));			
-		}
-		else if(opts.content=='tags') {
-			this.add_user_tags(parent, data);
-		}
-		else if(opts.content=='modified') {
-			$(parent).append(data.when)
-				.attr("title", wn._("Last Modified On:")+" " + data.when);
-		}
-		else if(opts.type=='bar-graph') {
-			this.render_bar_graph(parent, data, opts.content, opts.label);
-		}
-		else if(opts.type=='link' && opts.doctype) {
-			$(parent).append(repl('<a href="#Form/'+opts.doctype+'/'
-				+data[opts.content]+'">'+data[opts.content]+'</a>', data));
-		}
-		else if(opts.template) {
-			$(parent).append(repl(opts.template, data));
-		}
-		else if(data[opts.content]) {
-			if(opts.type=="date") {
-				data[opts.content] = wn.datetime.str_to_user(data[opts.content])
+			
+		$.each(wn.model.get("DocField", {"parent":this.doctype, "in_list_view":1}), function(i,d) {
+			if(d.fieldtype=="Image" && d.options) {
+				me.fields.push(t + "`" + d.options + "`");
+			} else {
+				me.fields.push(t + "`" + d.fieldname + "`");
+			}
+			
+			if(d.fieldtype=="Select") {
+				me.stats.push(d.fieldname);
 			}
 
-			$(parent).append(repl('<span title="%(title)s"> %(content)s</span>', {
-				"title": (opts.title || opts.content)
-					+ (data[opts.content].indexOf("<")===-1
-						? ": " + data[opts.content].replace(/\"/g, '&quot;')
-						: ""),
-				"content": data[opts.content]
-			}));
+			// currency field for symbol (multi-currency)
+			if(d.fieldtype=="Currency" && d.options) {
+				if(d.options.indexOf(":")!=-1) {
+					me.fields.push(t + "`" + d.options.split(":")[1] + "`");
+				} else {
+					me.fields.push(t + "`" + d.options + "`");
+				};
+			}
+
+		});
+
+		// additional fields
+		if(this.settings.add_fields) {
+			$.each(this.settings.add_fields, function(i, d) {
+				me.fields.push(d);
+			});
 		}
+	},
+	set_columns: function() {
+		this.columns = [];
+		var me = this;
+		if(wn.model.can_delete(this.doctype)) {
+			this.columns.push({width: '3%', content:'check'})
+		}
+		this.columns.push({width: '4%', content:'avatar'});
+		if(wn.model.is_submittable(this.doctype)) {
+			this.columns.push({width: '3%', content:'docstatus', 
+				css: {"text-align": "center"}});
+		}
+		this.columns.push({width: '20%', content:'name'});
+
+		$.each(wn.model.get("DocField", {"parent":this.doctype, "in_list_view":1}), function(i,d) {
+			
+			// field width
+			var width = "15%";
+			if(in_list(["Int", "Percent"], d.fieldtype)) {
+				width = "13%";
+			} else if(in_list(["Int", "Percent"], d.fieldtype)) {
+				width = "10%";
+			} else if(d.fieldtype=="Check" || d.fieldname=="file_list") {
+				width = "5%";
+			} else if(d.fieldname=="subject") { // subjects are longer
+				width = "20%";
+			}
+			me.columns.push({width:width, content: d.fieldname, 
+				type:d.fieldtype, df:d, title:wn._(d.label) });
+		});
+
+		// additional columns
+		if(this.settings.add_columns) {
+			$.each(this.settings.add_columns, function(i, d) {
+				me.columns.push(d);
+			});
+		}
+
+		// tags
+		this.columns.push({width: '15%', content:'tags', css: {'color':'#aaa'}}),
+
+		this.columns.push({width: '15%', content:'modified', 
+			css: {'text-align': 'right', 'color':'#222'}});
+
 		
 	},
 	render: function(row, data) {
@@ -122,8 +124,157 @@ wn.views.ListView = Class.extend({
 		
 		// render cells
 		$.each(this.columns, function(i, v) {
-			me.render_column(data, tr.cells[i], v);
+			me.render_column(data, $("<div>")
+				.css({
+					"overflow":"hidden",
+					"white-space": "nowrap",
+					"text-overflow": "ellipsis",
+					"max-height": "30px",
+				})
+				.appendTo(tr.cells[i]).get(0), v);
 		});
+	},
+	render_column: function(data, parent, opts) {
+		var me = this;
+		if(opts.type) opts.type= opts.type.toLowerCase();
+		
+		// style
+		if(opts.css) {
+			$.each(opts.css, function(k, v) { $(parent).css(k, v)});
+		}
+		
+		// multiple content
+		if(opts.content.indexOf && opts.content.indexOf('+')!=-1) {
+			$.map(opts.content.split('+'), function(v) {
+				me.render_column(data, parent, {content:v, title: opts.title});
+			});
+			return;
+		}
+		
+		// content
+		if(typeof opts.content=='function') {
+			opts.content(parent, data, me);
+		}
+		else if(opts.content=='name') {
+			$("<a>")
+				.attr("href", "#Form/" + data.doctype + "/" + data.name)
+				.html(data.name)
+				.appendTo(parent);
+		} 
+		else if(opts.content=='avatar' || opts.content=='avatar_modified') {
+			$(parent).append(wn.avatar(data.owner, false, wn._("Modified by")+": " 
+				+ wn.user_info(data.modified_by).fullname));
+		}
+		else if(opts.content=='check') {
+			$(parent).append('<input class="list-delete" type="checkbox">');
+			$(parent).find('input').data('name', data.name);			
+		}
+		else if(opts.content=='docstatus') {
+			$(parent).append(repl('<span class="docstatus"> \
+				<i class="%(docstatus_icon)s" \
+				title="%(docstatus_title)s"></i></span>', data));			
+		}
+		else if(opts.content=='enabled') {
+			data.icon = cint(data.enabled) ? "icon-check" : "icon-check-empty";
+			data.title = cint(data.enabled) ? wn._("Enabled") : wn._("Disabled");
+			$(parent).append(repl('<span class="docstatus"> \
+				<i class="%(icon)s" title="%(title)s"></i></span>', data));			
+		}
+		else if(opts.content=='disabled') {
+			data.icon = cint(data.disabled) ? "icon-check-empty" : "icon-check"
+			data.title = cint(data.disabled) ? wn._("Disabled") : wn._("Enabled");
+			$(parent).append(repl('<span class="docstatus"> \
+				<i class="%(icon)s"></i></span>', data));			
+		}
+		else if(opts.content=='tags') {
+			this.add_user_tags(parent, data);
+		}
+		else if(opts.content=='modified') {
+			$("<span>")
+				.html(data.when)
+				.appendTo(parent)
+				.attr("title", wn._("Last Modified On"))
+				.css({"color":"#888"})
+		}
+		else if(opts.content=="file_list") {
+			if(data[opts.content]) {
+				$("<i class='icon-paper-clip'>").appendTo(parent);
+			}
+		}
+		else if(opts.type=='bar-graph' || opts.type=="percent") {
+			this.render_bar_graph(parent, data, opts.content, opts.label);
+		}
+		else if(opts.type=='link' && (opts.df ? opts.df.options : opts.doctype)) {
+			var doctype = (opts.df ? opts.df.options : opts.doctype);
+			$(parent).append(repl('<a href="#Form/'+ doctype +'/'
+				+data[opts.content]+'">'+data[opts.content]+'</a>', data));
+		}
+		else if(opts.template) {
+			$(parent).append(repl(opts.template, data));
+		} 
+		else if(opts.type=="date" && data[opts.content]) {
+			$("<span>")
+				.html(wn.datetime.str_to_user(data[opts.content]))
+				.css({"color":"#888"})
+				.appendTo(parent);
+		}
+		else if(opts.type=="image") {
+			data[opts.content] = data[opts.df.options];
+			if(data[opts.content])
+				$("<img>")
+					.attr("src", wn.utils.get_file_link(data[opts.content]))
+					.css({
+						"max-width": "100px",
+						"max-height": "30px"
+					})
+					.appendTo(parent);
+		}
+		else if(opts.type=="select" && data[opts.content]) {
+			
+			var label_class = "";
+			if(has_words(["Open", "Pending"], data[opts.content])) {
+				label_class = "label-important";
+			} else if(has_words(["Closed", "Finished", "Converted", "Completed", "Confirmed", 
+				"Approved", "Yes", "Active"], data[opts.content])) {
+				label_class = "label-success";
+			} else if(has_words(["Submitted"], data[opts.content])) {
+				label_class = "label-info";
+			}
+			
+			$("<span class='label'>" 
+				+ data[opts.content] + "</span>")
+				.css({"cursor":"pointer"})
+				.addClass(label_class)
+				.attr("data-fieldname", opts.content)
+				.click(function() {
+					me.doclistview.set_filter($(this).attr("data-fieldname"), 
+						$(this).text());
+				})
+				.appendTo(parent);
+		}
+		else if(data[opts.content]) {
+			$("<span>")
+				.html(wn.format(data[opts.content], opts.df, data))
+				.appendTo(parent)
+		}
+		
+		// finally
+		if(!$(parent).html()) {
+			$("<span>-</span>").css({color:"#ccc"}).appendTo(parent);
+		}
+		
+		// title
+		if(!in_list(["avatar"], opts.content)) {
+			$(parent).attr("title", (opts.title || opts.content) + ": " 
+				+ (data[opts.content] || "Not Set"))
+				.tooltip();
+		}
+		
+	},
+	show_hide_check_column: function() {
+		if(!this.doclistview.can_delete) {
+			this.columns = $.map(this.columns, function(v, i) { if(v.content!='check') return v });
+		}
 	},
 	prepare_data: function(data) {
 		if(data.modified)
@@ -147,6 +298,10 @@ wn.views.ListView = Class.extend({
 				data[key]='';
 			}
 		}
+
+		// prepare data in settings
+		if(this.settings.prepare_data)
+			this.settings.prepare_data(data);
 	},
 	
 	prepare_when: function(data, date_str) {
@@ -168,12 +323,9 @@ wn.views.ListView = Class.extend({
 	add_user_tags: function(parent, data) {
 		var me = this;
 		if(data._user_tags) {
-			if($(parent).html().length > 0) {
-				$(parent).append('<br />');
-			}
 			$.each(data._user_tags.split(','), function(i, t) {
 				if(t) {
-					$('<span class="label label-info" style="cursor: pointer; line-height: 200%">' 
+					$('<span class="label" style="cursor: pointer;">' 
 						+ strip(t) + '</span>')
 						.click(function() {
 							me.doclistview.set_filter('_user_tags', $(this).text())
@@ -182,11 +334,6 @@ wn.views.ListView = Class.extend({
 				}
 			});
 		}		
-	},
-	show_hide_check_column: function() {
-		if(!this.doclistview.can_delete) {
-			this.columns = $.map(this.columns, function(v, i) { if(v.content!='check') return v });
-		}
 	},
 	render_bar_graph: function(parent, data, field, label) {
 		var args = {
@@ -206,12 +353,13 @@ wn.views.ListView = Class.extend({
 	}
 });
 
+// embeddable
 wn.provide('wn.views.RecordListView');
 wn.views.RecordListView = wn.views.DocListView.extend({
 	init: function(doctype, wrapper, ListView) {
 		this.doctype = doctype;
 		this.wrapper = wrapper;
-		this.listview = new ListView(this);
+		this.listview = new ListView(this, doctype);
 		this.listview.parent = this;
 		this.setup();
 	},
@@ -219,19 +367,15 @@ wn.views.RecordListView = wn.views.DocListView.extend({
 	setup: function() {
 		var me = this;
 		me.page_length = 10;
-
 		$(me.wrapper).empty();
-
 		me.init_list();
 	},
 
 	get_args: function() {
 		var args = this._super();
-		
 		$.each((this.default_filters || []), function(i, f) {
 		      args.filters.push(f);
 		});
-		
 		args.docstatus = args.docstatus.concat((this.default_docstatus || []));
 		return args;
 	},

@@ -805,6 +805,7 @@ _f.Frm.prototype.setup_client_js = function(caller, cdt, cdn) {
 		try {
 			var tmp = eval(cs);
 		} catch(e) {
+			show_alert("Error in Client Script.")
 			console.log(e);
 		}
 	}
@@ -893,7 +894,7 @@ _f.Frm.prototype.reload_doc = function() {
 }
 
 var validated;
-_f.Frm.prototype.save = function(save_action, callback, btn) {
+_f.Frm.prototype.save = function(save_action, callback, btn, on_error) {
 	$(document.activeElement).blur();
 	var me = this;
 	
@@ -902,6 +903,8 @@ _f.Frm.prototype.save = function(save_action, callback, btn) {
 		validated = true;
 		this.runclientscript('validate');
 		if(!validated) {
+			if(on_error) 
+				on_error();
 			return;
 		}
 	}
@@ -914,24 +917,27 @@ _f.Frm.prototype.save = function(save_action, callback, btn) {
 			if(save_action==="Save") {
 				me.runclientscript("after_save", me.doctype, me.docname);
 			}
+		} else {
+			if(on_error)
+				on_error();
 		}
 		callback && callback(r);
 	}, btn);
 }
 
 
-_f.Frm.prototype.savesubmit = function(btn) {
+_f.Frm.prototype.savesubmit = function(btn, on_error) {
 	var me = this;
 	wn.confirm("Permanently Submit "+this.docname+"?", function() {
 		me.save('Submit', function(r) {
 			if(!r.exc) {
 				me.runclientscript('on_submit', me.doctype, me.docname);
 			}
-		}, btn);
+		}, btn, on_error);
 	});
 }
 
-_f.Frm.prototype.savecancel = function(btn) {
+_f.Frm.prototype.savecancel = function(btn, on_error) {
 	var me = this;
 	wn.confirm("Permanently Cancel "+this.docname+"?", function() {
 		me.runclientscript("before_cancel", me.doctype, me.docname);
@@ -941,7 +947,7 @@ _f.Frm.prototype.savecancel = function(btn) {
 				me.refresh();
 				me.runclientscript("after_cancel", me.doctype, me.docname);
 			}
-		}, btn);
+		}, btn, on_error);
 	});
 }
 

@@ -118,6 +118,11 @@ $.extend(wn.model, {
 		return wn.boot.profile.can_cancel.indexOf(doctype)!=-1;
 	},
 	
+	is_submittable: function(doctype) {
+		if(!doctype) return false;
+		return locals.DocType[doctype] && locals.DocType[doctype].is_submittable;
+	},
+	
 	has_value: function(dt, dn, fn) {
 		// return true if property has value
 		var val = locals[dt] && locals[dt][dn] && locals[dt][dn][fn];
@@ -137,8 +142,15 @@ $.extend(wn.model, {
 	},
 
 	get: function(doctype, filters) {
-		if(!locals[doctype]) return [];
-		return wn.utils.filter_dict(locals[doctype], filters);
+		var src = locals[doctype] || locals[":" + doctype] || [];
+		if($.isEmptyObject(src)) 
+			return src;
+		return wn.utils.filter_dict(src, filters);
+	},
+	
+	get_value: function(doctype, filters, fieldname) {
+		var l = wn.model.get(doctype, filters);
+		return (l.length && l[0]) ? l[0][fieldname] : null;
 	},
 	
 	get_doc: function(doctype, name) {

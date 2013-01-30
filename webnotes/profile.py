@@ -42,8 +42,6 @@ class Profile:
 		self.can_search = []
 		self.can_get_report = []
 		self.allow_modules = []
-		
-		# for doctypes with create permission but are not supposed to be created using New
 		self.in_create = []
 
 	def get_roles(self):
@@ -98,7 +96,7 @@ class Profile:
 		
 		self.build_doctype_map()
 		self.build_perm_map()
-		
+				
 		for dt in self.doctype_map:
 			dtp = self.doctype_map[dt]
 			p = self.perm_map.get(dt, {})

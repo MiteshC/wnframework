@@ -652,7 +652,7 @@ $.extend(_p, {
 				
 				// Add label
 				row.cells[0].innerHTML = f.label ? f.label : f.fieldname;
-				$s(row.cells[1], val, f.fieldtype);
+				row.cells[1].innerHTML = wn.format(val, f, {for_print: true});
 				
 				// left align currency in normal display
 				if(f.fieldtype == 'Currency') {

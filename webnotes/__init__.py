@@ -70,6 +70,8 @@ cookies = {}
 response = _dict({'message':'', 'exc':''})
 debug_log = []
 message_log = []
+
+user_lang = False
 lang = 'en'
 
 # memcache
@@ -238,13 +240,16 @@ def whitelist(allow_guest=False, allow_roles=[]):
 	return innerfn
 	
 def clear_cache(user=None, doctype=None):
-	"""clear boot cache"""
+	"""clear cache"""
 	if doctype:
 		from webnotes.model.doctype import clear_cache
 		clear_cache(doctype)
+	elif user:
+		from webnotes.sessions import clear_cache
+		clear_cache(user)
 	else:
-		from webnotes.sessions import clear
-		clear(user)
+		from webnotes.sessions import clear_cache
+		clear_cache()
 	
 def get_roles(user=None, with_standard=True):
 	"""get roles of current user"""
@@ -260,7 +265,7 @@ def get_roles(user=None, with_standard=True):
 	# filter standard if required
 	if not with_standard:
 		roles = filter(lambda x: x not in ['All', 'Guest', 'Administrator'], roles)
-	
+		
 	return roles
 
 def has_permission(doctype, ptype="read", doc=None):

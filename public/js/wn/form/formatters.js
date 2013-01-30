@@ -1,28 +1,38 @@
 // for license information please see license.txt
 
-wn.provide("wn.form.formatters")
+wn.provide("wn.form.formatters");
+
 wn.form.formatters = {
 	Data: function(value) {
 		return value==null ? "" : value
 	},
-	Float: function(value) {
-		return "<div style='text-align: right'>" + flt(value, 6) + "</div>";
+	Float: function(value, docfield) {
+		var decimals = wn.boot.sysdefaults.float_precision ? 
+			parseInt(wn.boot.sysdefaults.float_precision) : null;
+
+		return "<div style='text-align: right'>" + 
+			format_number(flt(value, decimals), null, decimals) + "</div>";
 	},
 	Int: function(value) {
 		return cint(value);
 	},
-	Currency: function(value) {
-		return "<div style='text-align: right'>" + fmt_money(value) + "</div>";
+	Percent: function(value) {
+		return cint(value) + "%";
+	},
+	Currency: function(value, docfield, doc) {
+		var currency = wn.meta.get_field_currency(docfield, doc);
+		return "<div style='text-align: right'>" + format_currency(value, currency) + "</div>";
 	},
 	Check: function(value) {
-		return value ? "<i class='icon-ok'></i>" : "<i class='icon'></i>";
+		return value ? "<i class='icon-check'></i>" : "<i class='icon-check-empty'></i>";
 	},
-	Link: function(value, docfield) {
-		if(!value) return "";
+	Link: function(value, docfield, options) {
+		if(options && options.for_print) 
+			return value;
+		if(!value) 
+			return "";
 		if(docfield && docfield.options) {
-			return repl('<a href="#Form/%(doctype)s/%(name)s">\
-				<i class="icon icon-share" title="Open %(name)s" \
-				style="margin-top:-1px"></i></a> %(name)s', {
+			return repl('<a href="#Form/%(doctype)s/%(name)s">%(name)s</a>', {
 				doctype: docfield.options,
 				name: value
 			});			
@@ -75,11 +85,17 @@ wn.form.formatters = {
 					icon: workflow_state.icon
 				});
 		} else {
-			return "<span class='label'>" + value + "</span>";						
+			return "<span class='label'>" + value + "</span>";
 		}
 	}
 }
 
 wn.form.get_formatter = function(fieldtype) {
+	if(!fieldtype) fieldtype = "Data";
 	return wn.form.formatters[fieldtype.replace(/ /g, "")] || wn.form.formatters.Data;
+}
+
+wn.format = function(value, df, options) {
+	if(!df) df = {"fieldtype":"Data"};
+	return wn.form.get_formatter(df.fieldtype)(value, df, options);
 }

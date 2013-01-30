@@ -448,7 +448,7 @@ wn.views.GridReport = Class.extend({
 	currency_formatter: function(row, cell, value, columnDef, dataContext) {
 		return repl('<div style="text-align: right; %(_style)s">%(value)s</div>', {
 			_style: dataContext._style || "",
-			value: dataContext._no_format ? value : fmt_money(value)
+			value: dataContext._no_format ? value : format_number(value)
 		});
 	},
 	text_formatter: function(row, cell, value, columnDef, dataContext) {
@@ -580,6 +580,7 @@ wn.views.GridReport = Class.extend({
 						return date==v.year_start_date ? true : null;
 					}).length;
 			});
+			
 		}
 		
 		// set label as last date of period
@@ -669,7 +670,7 @@ wn.views.GridReportWithPlot = wn.views.GridReport.extend({
 	},
 	get_tooltip_text: function(label, x, y) {
 		var date = dateutil.obj_to_user(new Date(x));
-	 	var value = fmt_money(y);
+	 	var value = format_number(y);
 		return value + " on " + date;
 	},
 	get_plot_data: function() {
@@ -715,11 +716,13 @@ wn.views.TreeGridReport = wn.views.GridReportWithPlot.extend({
 			if(!tmap[v.parent]) tmap[v.parent] = [];
 			tmap[v.parent].push(v);
 		});
-		this.tl = [];
+		if (!this.tl) this.tl = {};
+		if (!this.tl[parent_doctype]) this.tl[parent_doctype] = [];
+		
 		$.each(wn.report_dump.data[parent_doctype], function(i, parent) {
 			if(tmap[parent.name]) {
 				$.each(tmap[parent.name], function(i, d) {
-					me.tl.push($.extend(copy_dict(parent), d));
+					me.tl[parent_doctype].push($.extend(copy_dict(parent), d));
 				});
 			}
 		});
@@ -820,4 +823,40 @@ wn.views.TreeGridReport = wn.views.GridReportWithPlot.extend({
 			d.indent = indent;
 		});
 	},
+	
+	export: function() {
+		var msgbox = msgprint('<p>Select To Download:</p>\
+			<p><input type="checkbox" name="with_groups" checked> With Groups</p>\
+			<p><input type="checkbox" name="with_ledgers" checked> With Ledgers</p>\
+			<p><button class="btn btn-info">Download</button>');
+
+		var me = this;
+
+		$(msgbox.body).find("button").click(function() {
+			var with_groups = $(msgbox.body).find("[name='with_groups']").is(":checked");
+			var with_ledgers = $(msgbox.body).find("[name='with_ledgers']").is(":checked");
+
+			var data = wn.slickgrid_tools.get_view_data(me.columns, me.dataView, 
+				function(row, item) {
+					if(with_groups) {
+						// add row
+						for(var i=0; i<item.indent; i++) row[0] = "   " + row[0];
+					}
+					if(with_groups && (item.group_or_ledger == "Group" || item.is_group)) {
+						return true;
+					}
+					if(with_ledgers && (item.group_or_ledger == "Ledger" || !item.is_group)) {
+						return true;
+					}
+				
+					return false;
+			});
+			
+			wn.tools.downloadify(data, ["Report Manager", "System Manager"], me);
+			return false;
+		})
+
+		return false;
+	},
+	
 });

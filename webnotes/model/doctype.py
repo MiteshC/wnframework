@@ -20,17 +20,19 @@
 # OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #
 
+"""
+Get metadata (main doctype with fields and permissions with all table doctypes)
 
-##	Get metadata (main doctype with fields and permissions with all table doctypes)
-#
-#	if exists in cache, get it from cache
-#	add custom fields
-#	override properties from PropertySetter
-#	sort based on prev_field
-#	optionally, post process (add js, css, select fields), or without
-#
-#	@package webnotes
+- if exists in cache, get it from cache
+- add custom fields
+- override properties from PropertySetter
+- sort based on prev_field
+- optionally, post process (add js, css, select fields), or without
+
+"""
 from __future__ import unicode_literals
+
+# imports
 import conf
 import webnotes
 import webnotes.model
@@ -39,6 +41,7 @@ import webnotes.model.doclist
 
 doctype_cache = {}
 docfield_types = None
+
 ##	This method is used to geting doclist
 #
 #	@param doctype The DocType which is need to get doclist
@@ -55,10 +58,14 @@ docfield_types = None
 #	@see update_language()
 #	@return doclist
 def get(doctype, processed=False, cached=True):
-	
+	"""return doclist"""
 	if cached:
 		doclist = from_cache(doctype, processed)
-		if doclist: return DocTypeDocList(doclist)
+		if doclist: 
+			if processed:
+				add_linked_with(doclist)
+				update_language(doclist)
+			return DocTypeDocList(doclist)
 	
 	load_docfield_types()
 	
@@ -77,9 +84,7 @@ def get(doctype, processed=False, cached=True):
 		expand_selects(doclist)
 		add_print_formats(doclist)
 		add_search_fields(doclist)
-		add_linked_with(doclist)
 		add_workflows(doclist)
-		update_language(doclist)
 
 	# add validators
 	#add_validators(doctype, doclist)
@@ -88,49 +93,42 @@ def get(doctype, processed=False, cached=True):
 	add_precision(doctype, doclist)
 
 	to_cache(doctype, processed, doclist)
+
+	if processed:
+		add_linked_with(doclist)
+		update_language(doclist)
 		
 	return DocTypeDocList(doclist)
 
-##	This method for loadin the docfield datatypes
-#
 def load_docfield_types():
 	global docfield_types
 	docfield_types = dict(webnotes.conn.sql("""select fieldname, fieldtype from tabDocField
 		where parent='DocField'"""))
-##	This method fir get active workflow<br />
-#	add workflow states (for icons and style)
-#
-#	@param doclist The DocList which is need to add workflow
+
 def add_workflows(doclist):
 	from webnotes.model.workflow import get_workflow_name
 	doctype = doclist[0].name
 	
-	
+	# get active workflow
 	workflow_name = get_workflow_name(doctype)
 
 	if workflow_name and webnotes.conn.exists("Workflow", workflow_name):
 		doclist += webnotes.get_doclist("Workflow", workflow_name)
 		
-		
+		# add workflow states (for icons and style)
 		for state in map(lambda d: d.state, doclist.get({"doctype":"Workflow Document State"})):
 			doclist += webnotes.get_doclist("Workflow State", state)
 	
-##	This method for get doclist of single doctype
-#
-#	@param doctype The DocType which is need to get doctupe of doclist
-#	@return doclist
 def get_doctype_doclist(doctype):
+	"""get doclist of single doctype"""
 	doclist = webnotes.get_doclist('DocType', doctype)
 	add_custom_fields(doctype, doclist)
 	apply_property_setters(doctype, doclist)
 	sort_fields(doclist)
 	return doclist
-	
-##	This method for sort on basis of previous_field
-#
-#	@param doclist The DocList which is need to sort the fields
+
 def sort_fields(doclist):
-	
+	"""sort on basis of previous_field"""
 	from webnotes.model.doclist import DocList
 	newlist = DocList([])
 	pending = filter(lambda d: d.doctype=='DocField', doclist)
@@ -203,10 +201,8 @@ def add_custom_fields(doctype, doclist):
 
 	return doclist
 
-##	This method for add list of doctypes this doctype is 'linked' with
-#
-#	@param doclist The DocList which is need to add link
 def add_linked_with(doclist):
+	"""add list of doctypes this doctype is 'linked' with"""
 	doctype = doclist[0].name
 	links = webnotes.conn.sql("""select parent, fieldname from tabDocField
 		where (fieldtype="Link" and options=%s)
@@ -217,15 +213,9 @@ def add_linked_with(doclist):
 		
 	doclist[0].fields["__linked_with"] = dict(list(set(links)))
 
-##	This method for load doclist from cache.<br />
-#	sets flag __from_cache in first doc of doclist if loaded from cache
-#
-#	@param doctype The DocType which is need to load doclist from cache
-#	@param processed The Processed which is need to load doclist from cache
-#	@return doctype_cache on not processed or doclst
 def from_cache(doctype, processed):
-	
-		
+	""" load doclist from cache.
+		sets flag __from_cache in first doc of doclist if loaded from cache"""
 	
 	global doctype_cache
 
@@ -253,22 +243,14 @@ def to_cache(doctype, processed, doclist):
 	if not processed:
 		doctype_cache[doctype] = doclist
 
-##	This method for returning cache key
-#
-#	@param doctype The DocType which is need to get cache key
-#	@param processed The Processed which is need to get cache key
-#	@return cachee key
 def cache_name(doctype, processed):
-	
+	"""returns cache key"""
 	suffix = ""
 	if processed:
 		suffix = ":Raw"
 	return "doctype:" + doctype + suffix
 
-##	This method for clear all parent doctypes
-#
-#	@param doctype The DocType which is need to clear_cache
-def clear_cache(doctype):
+def clear_cache(doctype=None):
 	global doctype_cache
 
 	def clear_single(dt):
@@ -278,12 +260,18 @@ def clear_cache(doctype):
 		if doctype in doctype_cache:
 			del doctype_cache[dt]
 
-	clear_single(doctype)
+	if doctype:
+		clear_single(doctype)
 	
-	
-	for dt in webnotes.conn.sql("""select parent from tabDocField 
-		where fieldtype="Table" and options=%s""", doctype):
-		clear_single(dt[0])
+		# clear all parent doctypes
+		for dt in webnotes.conn.sql("""select parent from tabDocField 
+			where fieldtype="Table" and options=%s""", doctype):
+			clear_single(dt[0])
+			
+	else:
+		# clear all
+		for dt in webnotes.conn.sql("""select name from tabDocType"""):
+			clear_single(dt[0])
 
 def add_code(doctype, doclist):
 	import os, conf
@@ -303,12 +291,11 @@ def add_code(doctype, doclist):
 	_add_code(scrub(doc.name) + '.css', '__css')
 	_add_code('%s_list.js' % scrub(doc.name), '__listjs')
 	add_embedded_js(doc)
-
-##	This method for embed all require files
-#
-#	@param doc The Doc is need to add embedded js
+	
 def add_embedded_js(doc):
-		import re, os, conf
+	"""embed all require files"""
+
+	import re, os, conf
 
 	# custom script
 	custom = webnotes.conn.get_value("Custom Script", {"dt": doc.name, 
@@ -457,13 +444,8 @@ class DocTypeDocList(webnotes.model.doclist.DocList):
 	def get_parent_doclist(self):
 		return webnotes.doclist([self[0]] + self.get({"parent": self[0].name}))
 
-##	This function assumes that sync is NOT performed
-#
-#	@param doctype The DocType which is need to rename field
-#	@param old_fieldname The Old FieldName which is need to rename field
-#	@param new_fieldname The New FieldName which is need to rename field
-#	@param lookup_field The LookUp Field which is need to rename field (default None)
 def rename_field(doctype, old_fieldname, new_fieldname, lookup_field=None):
+	"""this function assumes that sync is NOT performed"""
 	import webnotes.model
 	doctype_list = get(doctype)
 	old_field = doctype_list.get_field(lookup_field or old_fieldname)

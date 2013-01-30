@@ -363,23 +363,31 @@ def parse_val(v):
 		v = int(v)
 	return v
 
-def fmt_money(amount, precision=2):
+def fmt_money(amount, precision=None):
 	"""
 	Convert to string with commas for thousands, millions etc
 	"""
-	curr = webnotes.conn.get_value('Control Panel', None, 'currency_format') or 'Millions'
-	amount = '%.*f' % (precision, flt(amount))
+	import webnotes, re
+	from webnotes import _
+	
+	curr = webnotes.conn.get_value('Control Panel', None, 
+		'currency_format') or 'Millions'
+	number_format = webnotes.conn.get_default("number_format") or "#,###.##"
+	decimal_str, comma_str, precision = get_number_format_info(number_format)
 	val = 2
 	if curr == 'Millions': val = 3
+	
+	amount = '%.*f' % (precision, flt(amount))
 
-	if amount.find('.') == -1:	temp = '00'
-	else: temp = amount.split('.')[1]
+	if amount.find('.') == -1:
+		decimals = ''
+	else: 
+		decimals = amount.split('.')[1]
 
 	l = []
 	minus = ''
 	if flt(amount) < 0: minus = '-'
 
-	amount = ''.join(amount.split(','))
 	amount = cstr(abs(flt(amount))).split('.')[0]
 	
 	# main logic	
@@ -394,9 +402,23 @@ def fmt_money(amount, precision=2):
 	
 	if len(amount) > 0:	l.insert(0,amount)
 
-	amount = ','.join(l)+'.'+temp
+	amount = comma_str.join(l) + decimal_str + decimals
 	amount = minus + amount
 	return amount
+	
+def get_number_format_info(format):
+	if format=="#.###":
+		return "", ".", 0
+	elif format=="#,###":
+		return "", ",", 0
+	elif format=="#,###.##" or format=="#,##,###.##":
+		return ".", ",", 2
+	elif format=="#.###,##":
+		return ",", ".", 2
+	elif format=="# ###.##":
+		return ".", " ", 2
+	else:
+		return ".", ",", 2
 
 #
 # convet currency to words
@@ -410,7 +432,7 @@ def money_in_words(number, main_currency = None, fraction_currency=None):
 	if not main_currency:
 		main_currency = d.get('currency', 'INR')
 	if not fraction_currency:
-		fraction_currency = d.get('fraction_currency', 'paise')
+		fraction_currency = webnotes.conn.get_value("Currency", main_currency, "fraction") or "Cent"
 
 	n = "%.2f" % flt(number)
 	main, fraction = n.split('.')

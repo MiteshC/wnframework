@@ -106,12 +106,14 @@ Field.prototype.set_max_width = function() {
 	}
 }
 
-Field.prototype.set_label = function() {
-	if(this.with_label && this.label_area && this.label!=this.df.label) { 
-		this.label_span.innerHTML = wn._(this.df.label);
-		this.label = this.df.label; 
+Field.prototype.set_label = function(label) {
+	if(!label) label = this.df.label;
+	if(this.with_label && this.label_area && this.label!=label) { 
+		this.label_span.innerHTML = wn._(label);
+		
+		// always store this.label as this.df.label, so that custom label does not change back
+		this.label = this.df.label;
 	}
-
 }
 
 Field.prototype.set_description = function(txt) {
@@ -178,7 +180,7 @@ Field.prototype.get_status = function() {
 
 	// workflow state
 	if(ret=="Write" && cur_frm && cur_frm.state_fieldname) {
-		if(cur_frm.read_only) {
+		if(cint(cur_frm.read_only)) {
 			ret = 'Read';
 		}
 		// fields updated by workflow must be read-only
@@ -242,7 +244,8 @@ Field.prototype.refresh_display = function() {
 			if(this.input) { // if there, show it!
 				$ds(this.input_area);
 				$dh(this.disp_area);
-				if(this.input.refresh)this.input.refresh();
+				if(this.input.refresh)
+					this.input.refresh();
 			} else { // no widget
 				$dh(this.input_area);
 				$ds(this.disp_area);
@@ -297,6 +300,7 @@ Field.prototype.refresh = function() {
 
 	this.refresh_mandatory();	
 	this.set_max_width();
+
 }
 
 Field.prototype.refresh_label_icon = function() {	
@@ -325,18 +329,20 @@ Field.prototype.set = function(val) {
 	
 	if(this.validate)
 		val = this.validate(val);
-	cur_frm.set_value_in_locals(this.doctype, this.docname, this.df.fieldname, val);
+
+	cur_frm.set_value_in_locals(this.doctype, this.docname, 
+		this.df.fieldname, val);
 	this.value = val; // for return
 }
 
 Field.prototype.set_input = function(val) {
 	this.value = val;
-	if(this.input&&this.input.set_input) {
-		if(val==null)this.input.set_input('');
-		else this.input.set_input(val); // in widget
+	if(this.input && this.input.set_input) {
+		this.input.set_input(val); // in widget
 	}
 	var disp_val = val;
-	if(val==null) disp_val = ''; 
+	if(val==null) 
+		disp_val = ''; 
 	this.set_disp(disp_val); // text
 }
 
@@ -366,6 +372,11 @@ Field.prototype.set_disp_html = function(t) {
 Field.prototype.set_disp = function(val) { 
 	this.set_disp_html(val);
 }
+
+Field.prototype.get_input = function() { 
+	return this.txt || this.input;
+}
+
 
 // for grids (activate against a particular record in the table
 Field.prototype.activate = function(docname) {
@@ -410,10 +421,7 @@ DataField.prototype.make_input = function() {
 
 	this.input.name = this.df.fieldname;
 	
-	$(this.input).change(function() {
-		//me.set_value(me.get_value && me.get_value() || $(this.input).val());
-		
-		// fix: allow 0 as value
+	$(this.input).blur(function() {
 		me.set_value(me.get_value ? me.get_value() : $(this.input).val());
 	});
 	
@@ -853,64 +861,65 @@ FloatField.prototype.onmake_input = function() {
 		this.select();
 	}
 }
+FloatField.prototype.set_disp = function(val) { 
+	this.set_disp_html(wn.format(val, this.df, locals[this.doctype][this.name]));
+}
 
-// ======================================================================================
+function PercentField() { } PercentField.prototype = new FloatField();
+PercentField.prototype.set_disp = function(val) { 
+	this.set_disp_html(wn.format(val, this.df));
+}
 
 function CurrencyField() { } CurrencyField.prototype = new FloatField();
-CurrencyField.prototype.format_input = function() { 
-	var v = fmt_money(this.input.value); 
-	if(this.not_in_form) {
-		if(!flt(this.input.value)) v = ''; // blank in filter
-	}
-	this.input.value = v;
-}
 
 CurrencyField.prototype.validate = function(v) { 
 	if(v==null || v=='')
 		return 0;
-	return flt(v,2); 
+	return flt(v); 
+}
+CurrencyField.prototype.get_formatted = function(val) {
+	if(this.not_in_form) 
+		return val;
+	var doc = null;
+	if(this.doctype && this.docname && locals[this.doctype])
+		doc = locals[this.doctype][this.docname];
+	return get_currency_symbol(wn.meta.get_field_currency(this.df, doc)) 
+		+ " " + format_number(val);
 }
 CurrencyField.prototype.set_disp = function(val) { 
-	var v = fmt_money(val); 
-	this.set_disp_html(v);
+	this.set_disp_html(this.get_formatted(val));
 }
-
-// ======================================================================================
 
 function CheckField() { } CheckField.prototype = new Field();
 CheckField.prototype.validate = function(v) {
-	var v= parseInt(v); if(isNaN(v))return 0;
-	return v;
+	return cint(v);
 }; 
 CheckField.prototype.onmake = function() {
 	this.checkimg = $("<i class='icon-check'></i>").appendTo(this.disp_area);
 }
 
 CheckField.prototype.make_input = function() { var me = this;
-	this.input = $a_input(this.input_area,'checkbox');
-	$y(this.input, {width:"16px", border:'0px', marginTop:'-2px'}); // no specs for checkbox
+	this.input = $("<input type='checkbox'>")
+		.appendTo(this.input_area)
+		.css({"border":"0px", "margin-top":"-2px", "width": "16px"}).get(0);
 	
-	$(this.input).click(function() {
-		me.set(this.checked?1:0);
-		me.run_trigger();		
+	$(this.input).change(function() {
+		me.set(this.checked ? 1 : 0);
+		me.run_trigger();
 	})
 	
 	this.input.set_input = function(v) {
-		v = parseInt(v); if(isNaN(v)) v = 0;
-		if(v) me.input.checked = true;
-		else me.input.checked=false;
+		me.input.checked = cint(v) ? true : false;
 	}
 
 	this.get_value= function() {
-		return this.input.checked?1:0;
+		return this.input.checked ? 1 : 0;
 	}
 
 }
 CheckField.prototype.set_disp = function(val) {
 	this.checkimg.toggle(val);
 }
-
-// ======================================================================================
 
 
 function TextField() { } TextField.prototype = new Field();
@@ -933,7 +942,7 @@ TextField.prototype.make_input = function() {
 		$(this.input).css({height: "160px"});
 	}
 	this.input.set_input = function(v) {
-		me.input.value = v;
+		me.input.value = (v==null ? "" : v);
 	}
 	this.input.onchange = function() {
 		me.set(me.input.value); 
@@ -1221,8 +1230,6 @@ _f.ButtonField.prototype.show = function() {
 _f.ButtonField.prototype.set = function(v) { }; // No Setter
 _f.ButtonField.prototype.set_disp = function(val) {  } // No Disp on readonly
 
-// ======================================================================================
-
 function make_field(docfield, doctype, parent, frm, in_grid, hide_label) { // Factory
 
 	switch(docfield.fieldtype.toLowerCase()) {
@@ -1233,6 +1240,7 @@ function make_field(docfield, doctype, parent, frm, in_grid, hide_label) { // Fa
 		case 'int':var f = new IntField(); break;
 		case 'float':var f = new FloatField(); break;
 		case 'currency':var f = new CurrencyField(); break;
+		case 'percent':var f = new PercentField(); break;
 		case 'read only':var f = new ReadOnlyField(); break;
 		case 'link':var f = new LinkField(); break;
 		case 'long text': var f = new TextField(); break;
