@@ -45,6 +45,7 @@
   "label": "Pre Function",
   "fieldname": "pre_function",
   "fieldtype": "Data"
+  "reqd": 0
  },
  {
   "doctype": "DocField", 
@@ -57,6 +58,7 @@
   "label": "Post Function",
   "fieldname": "post_function",
   "fieldtype": "Data"
+  "reqd": 0
  },
  {
   "doctype": "DocField", 

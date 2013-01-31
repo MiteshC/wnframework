@@ -57,6 +57,13 @@
  }, 
  {
   "doctype": "DocField", 
+  "label": "Pre Check", 
+  "fieldname": "pre_check", 
+  "fieldtype": "Data",
+  "reqd": 0
+ },
+ {
+  "doctype": "DocField", 
   "label": "Only Allow Edit For", 
   "width": "160px", 
   "fieldname": "allow_edit", 

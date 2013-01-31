@@ -280,6 +280,9 @@ class ModelWrapper:
 				previousState = webnotes.conn.get_value(self.doc.doctype, self.doc.name, 'workflow_state')
 				if previousState<>self.doc.workflow_state:
 					workflowTransition = webnotes.conn.sql("""select `tabWorkflow Transition`.`pre_function`, `tabWorkflow Transition`.`post_function` from `tabWorkflow Transition` left join `tabWorkflow` on (`tabWorkflow`.name=`tabWorkflow Transition`.parent) where `tabWorkflow Transition`.`state`="%s" and `tabWorkflow Transition`.`next_state`="%s" and `tabWorkflow`.`is_active`=1 """%(previousState,self.doc.workflow_state))
+					wfStatePreCheck = webnotes.conn.sql("""SELECT  `tabWorkflow Document State`.`pre_check` FROM  `tabWorkflow Document State` LEFT JOIN  `tabWorkflow` ON (  `tabWorkflow`.name =  `tabWorkflow Document State`.parent ) WHERE  `tabWorkflow Document State`.`state` =  "%s" AND  `tabWorkflow`.`is_active` =1 """%(self.doc.workflow_state))
+					if len(wfStatePreCheck)>0 and wfStatePreCheck[0][0] is not None:
+						self.run_method(wfStatePreCheck[0][0])
 			self.run_method('validate')
 			if len(workflowTransition)==1 and workflowTransition[0][0]<>"" and workflowTransition[0][0] is not None:
 				self.run_method(workflowTransition[0][0])
