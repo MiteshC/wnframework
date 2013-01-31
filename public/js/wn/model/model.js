@@ -62,6 +62,7 @@ $.extend(wn.model, {
 		} else {
 			wn.call({
 				method:'webnotes.widgets.form.load.getdoctype',
+				type: "GET",
 				args: {
 					doctype: doctype,
 					with_parent: 1
@@ -78,6 +79,7 @@ $.extend(wn.model, {
 		} else {
 			wn.call({
 				method: 'webnotes.widgets.form.load.getdoc',
+				type: "GET",
 				args: {
 					doctype: doctype,
 					name: name
@@ -190,8 +192,10 @@ $.extend(wn.model, {
 				parentfield:parentfield});				
 		}
 
-		l.sort(function(a,b) { return cint(a.idx) - cint(b.idx) }); 
-		$.each(l, function(i, v) { v.idx = i+1; }); // for chrome bugs ???
+		if(l.length) {
+			l.sort(function(a,b) { return cint(a.idx) - cint(b.idx) }); 
+			$.each(l, function(i, v) { v.idx = i+1; }); // for chrome bugs ???
+		}
 		return l; 
 	},
 
