@@ -273,23 +273,38 @@ class ModelWrapper:
 	#	@see save_children()
 	#	@see no_permission_to()
 	def save(self, check_links=1):
+		# check for the document permission for logged user
 		if self.ignore_permissions or webnotes.has_permission(self.doc.doctype, "write", self.doc):
+			# Check the links and update parent timestamp		
 			self.prepare_for_save(check_links)
+			# Variable to get workflow transtions			
 			workflowTransition = []
+			# To check whether the document can have workflow or not			
 			if self.doc.workflow_state:
+				# get_value function fetches the value from database for a record of a doctype			
 				previousState = webnotes.conn.get_value(self.doc.doctype, self.doc.name, 'workflow_state')
+				# To check if the workflow status has been changed while saving the document or not
 				if previousState<>self.doc.workflow_state:
+					# if the state changed then fetch the pre & post method associated with transition
 					workflowTransition = webnotes.conn.sql("""select `tabWorkflow Transition`.`pre_function`, `tabWorkflow Transition`.`post_function` from `tabWorkflow Transition` left join `tabWorkflow` on (`tabWorkflow`.name=`tabWorkflow Transition`.parent) where `tabWorkflow Transition`.`state`="%s" and `tabWorkflow Transition`.`next_state`="%s" and `tabWorkflow`.`is_active`=1 """%(previousState,self.doc.workflow_state))
+					# Fetch the pre_check method associated with state
 					wfStatePreCheck = webnotes.conn.sql("""SELECT  `tabWorkflow Document State`.`pre_check` FROM  `tabWorkflow Document State` LEFT JOIN  `tabWorkflow` ON (  `tabWorkflow`.name =  `tabWorkflow Document State`.parent ) WHERE  `tabWorkflow Document State`.`state` =  "%s" AND  `tabWorkflow`.`is_active` =1 """%(self.doc.workflow_state))
 					if len(wfStatePreCheck)>0 and wfStatePreCheck[0][0] is not None:
+						# run the pre_check method
 						self.run_method(wfStatePreCheck[0][0])
 			self.run_method('validate')
+			# check if pre method is given in workflow transition or not
 			if len(workflowTransition)==1 and workflowTransition[0][0]<>"" and workflowTransition[0][0] is not None:
+				# run the pre method
 				self.run_method(workflowTransition[0][0])
+			# save the main document fields
 			self.save_main()
+			# save the details tables of document
 			self.save_children()
 			self.run_method('on_update')
+			# check if post method is given in workflow transition or not
 			if len(workflowTransition)==1  and workflowTransition[0][1]<>"" and workflowTransition[0][1] is not None:
+				# run the post method
 				self.run_method(workflowTransition[0][1])
 		else:
 			self.no_permission_to(_("Write"))
